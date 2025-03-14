@@ -1,5 +1,5 @@
-import dash
-from dash import dcc, html, dash_table, Input, Output, State
+import db
+from db import dcc, html, dash_table, Input, Output, State
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -40,7 +40,7 @@ for sheet in sheets_to_read:
     df_list.append(df_sheet)
 df = pd.concat(df_list, ignore_index=True)
 
-app = dash.Dash(__name__, suppress_callback_exceptions=True)
+app = db.Dash(__name__, suppress_callback_exceptions=True)
 server = app.server
 
 # =============================================
@@ -72,12 +72,12 @@ def exportar_dados(filtered_df):
         return (
             None,
             dcc.send_bytes(buffer.getvalue(), filename="dados_exportados.xlsx"),
-            dash.no_update,
+            db.no_update,
             []
         )
     except Exception as e:
         print(f"Erro na exportação: {str(e)}")
-        return f"❌ Erro na exportação: {str(e)}", None, dash.no_update, []
+        return f"❌ Erro na exportação: {str(e)}", None, db.no_update, []
 
 
 
@@ -382,7 +382,7 @@ def calcular_soma(start_date, end_date):
 )
 def gerenciar_dados(*args):
     global df
-    ctx = dash.callback_context
+    ctx = db.callback_context
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
 
     try:
@@ -402,7 +402,7 @@ def gerenciar_dados(*args):
         filtered_df = df.loc[mask].copy()
     except Exception as e:
         print(f"Erro no pré-processamento: {str(e)}")
-        return dash.no_update, dash.no_update, df.to_dict("records"), []
+        return db.no_update, db.no_update, df.to_dict("records"), []
 
     # 4. Determinar ação do usuário
     try:
@@ -417,9 +417,9 @@ def gerenciar_dados(*args):
             
     except Exception as e:
         print(f"Erro na ação: {str(e)}")
-        return f"Erro: {str(e)}", None, dash.no_update, []
+        return f"Erro: {str(e)}", None, db.no_update, []
 
-    return dash.no_update, dash.no_update, filtered_df.to_dict("records"), []
+    return db.no_update, db.no_update, filtered_df.to_dict("records"), []
 
 def salvar_dados(form_inputs, filtered_df, start_date, end_date):
     try:
@@ -476,13 +476,13 @@ def salvar_dados(form_inputs, filtered_df, start_date, end_date):
         )
     except Exception as e:
         print(f"Erro ao salvar: {str(e)}")
-        return f"❌ Erro ao salvar: {str(e)}", None, dash.no_update, []
+        return f"❌ Erro ao salvar: {str(e)}", None, db.no_update, []
 
 def apagar_linha(selected_rows, start_date, end_date):
     global df
     try:
         if not selected_rows:
-            return "⚠️ Selecione uma linha antes de apagar!", None, dash.no_update, []
+            return "⚠️ Selecione uma linha antes de apagar!", None, db.no_update, []
         
         # 1. Obter índices reais no DataFrame global
         mask = (df['data'] >= pd.to_datetime(start_date)) & (df['data'] <= pd.to_datetime(end_date))
@@ -507,7 +507,7 @@ def apagar_linha(selected_rows, start_date, end_date):
         )
     except Exception as e:
         print(f"Erro ao apagar: {str(e)}")
-        return f"❌ Erro ao apagar linha: {str(e)}", None, dash.no_update, []
+        return f"❌ Erro ao apagar linha: {str(e)}", None, db.no_update, []
 
 
 
