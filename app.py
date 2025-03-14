@@ -5,6 +5,7 @@ import numpy as np
 from datetime import datetime
 import io
 from dash.exceptions import PreventUpdate
+import app as aplication 
 
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 server = app.server
