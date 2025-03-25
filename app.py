@@ -45,12 +45,12 @@ for sheet in sheets_to_read:
 df = pd.concat(df_list, ignore_index=True)
 
 # =============================================
-# FUNÇÕES DE PRÉ-PROCESSAMENTO (ATUALIZADAS)
+# FUNÇÕES DE PRÉ-PROCESSAMENTO
 # =============================================
 
 def salvar_no_excel(df):
     try:
-        with pd.ExcelWriter('a.xlsx', engine='openpyxl') as writer:
+        with pd.ExcelWriter('b.xlsx', engine='openpyxl') as writer:
             for month_num, sheet_name in meses.items():
                 month_df = df[df['data'].dt.month == month_num].copy()
                 month_df.to_excel(writer, sheet_name=sheet_name, index=False)
@@ -110,7 +110,7 @@ def atualizar_porcentagens(df):
 def calcular_nota_fiscal(df):
     """Calcula 3.2% do Valor_Transacionado para a coluna Nota_fiscal"""
     df['nota_fiscal'] = (df['valor_transacionado'] * 0.032).round(2)
-    return df  # ← Adicione esta função
+    return df  
 
 
 # Pré-processamento inicial
@@ -135,7 +135,7 @@ df['valor_dualcred'] = df.apply(calcular_valor_dualcred, axis=1).round(2)
 df = atualizar_porcentagens(df)
 df = calcular_nota_fiscal(df) 
 # =============================================
-# LAYOUT (COM INPUTS NUMÉRICOS CORRIGIDOS)
+# LAYOUT
 # =============================================
 input_columns = [
     'data',
@@ -345,18 +345,22 @@ def calcular_soma(start_date, end_date):
             'Valor_Liberado': df_filtrado['valor_liberado'].sum(),
             'Comissão_Alessandro': df_filtrado['comissão_alessandro'].sum(),
             'Valor_DualCred': df_filtrado['valor_dualcred'].sum(),
-            'Extra_Alessandro': df_filtrado['extra_alessandro'].sum()
+            'Extra_Alessandro': df_filtrado['extra_alessandro'].sum(),
+            'nota_fiscal': df_filtrado['nota_fiscal'].sum()
+
+
         }
         
         return html.Pre(
-            f"RELATÓRIO CONSOLIDADO\n"
+            f"RELATÓRIO DE VALORES\n"
             f"──────────────────────\n"
             f"Período: {start_str} - {end_str}\n\n"  # Usar strings tratadas
             f"Valor Transacionado: R$ {soma['Valor_Transacionado']:,.2f}\n"
             f"Valor Liberado:      R$ {soma['Valor_Liberado']:,.2f}\n"
             f"Comissão Alessandro: R$ {soma['Comissão_Alessandro']:,.2f}\n"
             f"Valor Dualcred:      R$ {soma['Valor_DualCred']:,.2f}\n"
-            f"Extra Alessandro:    R$ {soma['Extra_Alessandro']:,.2f}"
+            f"Extra Alessandro:    R$ {soma['Extra_Alessandro']:,.2f}\n"
+            f"Nota Fiscal:         R$ {soma['nota_fiscal']:,.2f}"
         )
     except Exception as e:
         return html.Pre(f"Erro no cálculo: {str(e)}")
