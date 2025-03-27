@@ -72,7 +72,7 @@ def exportar_dados(filtered_df):
         buffer.seek(0)  # Rebobinar o buffer
         return (
             None,
-            dcc.send_bytes(buffer.getvalue(), filename="dados_exportados.xlsx"),
+            dcc.send_bytes(buffer.getvalue(), filename="Planilha_Exportada.xlsx"),
             dash.no_update,
             []
         )
@@ -432,7 +432,7 @@ def salvar_dados(form_inputs, filtered_df, start_date, end_date):
         for col, val in zip(input_columns, form_inputs):
             if col == 'data':
                 # Converter e tratar datas inválidas
-                dt = pd.to_datetime(val, errors='coerce', dayfirst=True)
+                dt = pd.to_datetime(val, errors='coerce', dayfirst=False)
                 novos_dados[col] = dt if not pd.isna(dt) else pd.Timestamp('2025-01-01')
                 
             elif col in numeric_cols:
