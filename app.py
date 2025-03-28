@@ -53,6 +53,8 @@ for sheet in sheets_to_read:
 
 # Concatenar todos os DataFrames
 df = pd.concat(df_list, ignore_index=True)
+if 'agente' not in df.columns:
+    df['agente'] = 'Alessandro'
 
 # Unificar colunas de parcelas
 if 'qtd_parcelas' in df.columns:
@@ -64,7 +66,15 @@ if 'qtd_parcelas' in df.columns:
         df.rename(columns={'qtd_parcelas': 'quantidade_parcelas'}, inplace=True)
 
 # Remover colunas vazias ou não utilizadas globalmente
-df = df.dropna(axis=1, how='all')  # Remove colunas totalmente vazias
+# List of columns to check (excluding protected columns)
+colunas_protegidas = ['agente']
+cols_to_check = [col for col in df.columns if col not in colunas_protegidas]
+
+# Identify columns with all NA values in the selected columns
+cols_all_na = df[cols_to_check].columns[df[cols_to_check].isna().all()]
+
+# Drop those columns
+df = df.drop(columns=cols_all_na,errors='ignore')
 
 # Lista definitiva de colunas para excluir
 excluir_colunas = [
@@ -74,6 +84,13 @@ excluir_colunas = [
 
 # Remover colunas indesejadas que eventualmente persistiram
 df = df.drop(columns=excluir_colunas, errors='ignore')
+
+# Atualizar nomes de colunas no DataFrame
+df.rename(columns={
+    'comissão_alessandro': 'comissão_agente',
+    'extra_alessandro': 'extra_agente',
+    'porcentagem_alessandro': 'porcentagem_agente'
+}, inplace=True)
 
 # =============================================
 # FUNÇÕES DE PRÉ-PROCESSAMENTO
@@ -119,8 +136,8 @@ def calcular_valor_dualcred(row):
         row['valor_transacionado']
         - row['valor_liberado']
         - row['taxa_de_juros']
-        - row['comissão_alessandro']
-        - row['extra_alessandro']
+        - row['comissão_agente']
+        - row['extra_agente']
     )
 
 def atualizar_porcentagens(df):
@@ -144,6 +161,14 @@ def calcular_nota_fiscal(df):
     return df  
 
 
+# Atualizar lista de colunas numéricas
+numeric_cols = [
+    'valor_transacionado', 'valor_liberado', 'taxa_de_juros',
+    'comissão_agente', 'extra_agente', 
+    'porcentagem_agente', 'nota_fiscal', 
+    'quantidade_parcelas'
+]
+
 # Pré-processamento inicial
 df.columns = [sanitize_column_name(col) for col in df.columns]
 df['data'] = pd.to_datetime(
@@ -151,13 +176,6 @@ df['data'] = pd.to_datetime(
     errors='coerce'
 ).fillna(pd.to_datetime('2025-01-01'))
 
-
-numeric_cols = [
-    'valor_transacionado', 'valor_liberado', 'taxa_de_juros',
-    'comissão_alessandro', 'extra_alessandro', 
-    'porcentagem_alessandro', 'nota_fiscal', 
-    'quantidade_parcelas'
-]
 
 for col in numeric_cols:
     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).round(2)
@@ -173,14 +191,15 @@ excluir_colunas = ['%_trans.', '%_liberad.', 'acerto_alessandro', 'retirada_feli
 # =============================================
 input_columns = [
     'data',
+    'agente',
     'beneficiário',
     'chave_pix_cpf',
     'valor_transacionado',
     'valor_liberado',
     'quantidade_parcelas',
-    'porcentagem_alessandro',
+    'porcentagem_agente',
     'taxa_de_juros',
-    'extra_alessandro'
+    'extra_agente'
 ]
 
 app.layout = html.Div(
@@ -380,9 +399,9 @@ def calcular_soma(start_date, end_date):
         soma = {
             'Valor_Transacionado': df_filtrado['valor_transacionado'].sum(),
             'Valor_Liberado': df_filtrado['valor_liberado'].sum(),
-            'Comissão_Alessandro': df_filtrado['comissão_alessandro'].sum(),
+            'Comissão_Agente': df_filtrado['comissão_agente'].sum(),
             'Valor_DualCred': df_filtrado['valor_dualcred'].sum(),
-            'Extra_Alessandro': df_filtrado['extra_alessandro'].sum(),
+            'Extra_Agente': df_filtrado['extra_agente'].sum(),
             'nota_fiscal': df_filtrado['nota_fiscal'].sum()
 
 
@@ -394,9 +413,9 @@ def calcular_soma(start_date, end_date):
             f"Período: {start_str} - {end_str}\n\n"  # Usar strings tratadas
             f"Valor Transacionado: R$ {soma['Valor_Transacionado']:,.2f}\n"
             f"Valor Liberado:      R$ {soma['Valor_Liberado']:,.2f}\n"
-            f"Comissão Alessandro: R$ {soma['Comissão_Alessandro']:,.2f}\n"
+            f"Comissão Agente:     R$ {soma['Comissão_Agente']:,.2f}\n"
             f"Valor Dualcred:      R$ {soma['Valor_DualCred']:,.2f}\n"
-            f"Extra Alessandro:    R$ {soma['Extra_Alessandro']:,.2f}\n"
+            f"Extra Agente:        R$ {soma['Extra_Agente']:,.2f}\n"
             f"Nota Fiscal:         R$ {soma['nota_fiscal']:,.2f}"
         )
     except Exception as e:
@@ -482,15 +501,15 @@ def salvar_dados(form_inputs, filtered_df, start_date, end_date):
             novos_dados['data'] = pd.Timestamp('2025-01-01')
             
         # 2. Cálculos automáticos
-        novos_dados['comissão_alessandro'] = round(
-            novos_dados['valor_liberado'] * (novos_dados['porcentagem_alessandro'] / 100), 2
+        novos_dados['comissão_agente'] = round(
+            novos_dados['valor_liberado'] * (novos_dados['porcentagem_agente'] / 100), 2
         )
         novos_dados['valor_dualcred'] = (
             novos_dados['valor_transacionado'] 
             - novos_dados['valor_liberado'] 
             - novos_dados['taxa_de_juros'] 
-            - novos_dados['comissão_alessandro'] 
-            - novos_dados['extra_alessandro']
+            - novos_dados['comissão_agente'] 
+            - novos_dados['extra_agente']
         )
         novos_dados['%trans'] = round(
             (novos_dados['valor_dualcred'] / novos_dados['valor_transacionado'] * 100), 2
