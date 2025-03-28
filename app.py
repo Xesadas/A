@@ -39,10 +39,41 @@ sheets_to_read = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN',
 df_list = []
 for sheet in sheets_to_read:
     df_sheet = pd.read_excel(file_path, sheet_name=sheet, engine='openpyxl')
-    # Sanitizar colunas antes de concatenar
+    
+    # Remover colunas totalmente vazias
+    df_sheet = df_sheet.dropna(axis=1, how='all')
+    
+    # Sanitizar nomes de colunas
     df_sheet.columns = [sanitize_column_name(col) for col in df_sheet.columns]
+    
+    # Remover colunas duplicadas (mesmo nome após sanitização)
+    df_sheet = df_sheet.loc[:, ~df_sheet.columns.duplicated()]
+    
     df_list.append(df_sheet)
+
+# Concatenar todos os DataFrames
 df = pd.concat(df_list, ignore_index=True)
+
+# Unificar colunas de parcelas
+if 'qtd_parcelas' in df.columns:
+    if 'quantidade_parcelas' in df.columns:
+        # Combinar valores não nulos
+        df['quantidade_parcelas'] = df['quantidade_parcelas'].combine_first(df['qtd_parcelas'])
+        df.drop('qtd_parcelas', axis=1, inplace=True)
+    else:
+        df.rename(columns={'qtd_parcelas': 'quantidade_parcelas'}, inplace=True)
+
+# Remover colunas vazias ou não utilizadas globalmente
+df = df.dropna(axis=1, how='all')  # Remove colunas totalmente vazias
+
+# Lista definitiva de colunas para excluir
+excluir_colunas = [
+    '%trans', '%liberad', 'acerto_alessandro', 
+    'retirada_felipe', 'máquina', 'acerto_alesandro'  # Nomes sanitizados
+]
+
+# Remover colunas indesejadas que eventualmente persistiram
+df = df.drop(columns=excluir_colunas, errors='ignore')
 
 # =============================================
 # FUNÇÕES DE PRÉ-PROCESSAMENTO
@@ -123,8 +154,9 @@ df['data'] = pd.to_datetime(
 
 numeric_cols = [
     'valor_transacionado', 'valor_liberado', 'taxa_de_juros',
-    'comissão_alessandro', 'extra_alessandro', 'qtd_parcelas',
-    'porcentagem_alessandro', 'nota_fiscal'
+    'comissão_alessandro', 'extra_alessandro', 
+    'porcentagem_alessandro', 'nota_fiscal', 
+    'quantidade_parcelas'
 ]
 
 for col in numeric_cols:
@@ -134,6 +166,8 @@ for col in numeric_cols:
 df['valor_dualcred'] = df.apply(calcular_valor_dualcred, axis=1).round(2)
 df = atualizar_porcentagens(df)
 df = calcular_nota_fiscal(df) 
+
+excluir_colunas = ['%_trans.', '%_liberad.', 'acerto_alessandro', 'retirada_felipe', 'máquina']
 # =============================================
 # LAYOUT
 # =============================================
@@ -217,7 +251,10 @@ app.layout = html.Div(
             children=[
                 dash_table.DataTable(
                     id="tabela-dados",
-                    columns=[{"name": col.upper(), "id": col} for col in df.columns],
+                    columns=[
+                    {"name": col.upper(), "id": col} 
+                    for col in df.columns 
+                    if col not in excluir_colunas],
                     data=df.to_dict("records"),
                     page_size=15,
                     style_cell={
