@@ -36,7 +36,7 @@ layout = html.Div(
         
         dcc.Interval(
             id='refresh-interval',
-            interval=30*1000,  # Atualiza a cada 30 segundos
+            interval=5*1000,  # Atualiza a cada 30 segundos
             n_intervals=0
         ),
         

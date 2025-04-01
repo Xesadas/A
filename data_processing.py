@@ -22,38 +22,17 @@ EXCEL_PATH = os.path.join(MOUNT_PATH, 'b.xlsx')
 def setup_persistent_environment():
     """Configuração robusta do ambiente persistente"""
     try:
-        # 1. Cria diretório se não existir
         os.makedirs(MOUNT_PATH, exist_ok=True)
         logger.info(f"Diretório verificado: {MOUNT_PATH}")
 
-        # 2. Cria arquivo Excel inicial com estrutura completa
+        # Verifica se o arquivo existe sem criar um novo
         if not os.path.exists(EXCEL_PATH):
-            logger.info("Criando novo arquivo Excel com estrutura completa...")
-            
+            logger.warning("Arquivo Excel não encontrado. Criando novo...")
             wb = Workbook()
-            meses = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN',
-                    'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ']
-            
-            # Cabeçalho completo com todas colunas necessárias
-            colunas_obrigatorias = [
-                'data', 'agente', 'valor_transacionado', 'valor_liberado',
-                'taxa_de_juros', 'comissão_agente', 'extra_agente',
-                'quantidade_parcelas'
-            ]
-            
-            # Remove sheet padrão
-            if 'Sheet' in wb.sheetnames:
-                del wb['Sheet']
-            
-            # Cria abas com estrutura completa
-            for mes in meses:
-                ws = wb.create_sheet(mes)
-                ws.append(colunas_obrigatorias)
-            
+            del wb['Sheet']
             wb.save(EXCEL_PATH)
-            logger.info(f"Arquivo inicial criado: {EXCEL_PATH}")
-
-        # 3. Verifica permissões
+        
+        # Verifica permissões
         if not os.access(MOUNT_PATH, os.W_OK):
             logger.error(f"Sem permissão de escrita em: {MOUNT_PATH}")
             raise PermissionError("Erro de permissão no diretório persistente")
@@ -68,167 +47,181 @@ def sanitize_column_name(col):
         .strip()
         .lower()
         .replace(" ", "_")
+        .replace("ç", "c")
+        .replace("ã", "a")
+        .replace("õ", "o")
+        .replace("ó", "o")
+        .replace("ô", "o")
+        .replace("à", "a")
+        .replace("é", "e")
+        .replace("ê", "e")
+        .replace("ú", "u")
+        .replace("%", "porcento")
         .replace("(", "")
         .replace(")", "")
-        .replace("?", "")
     )
 
 def load_and_process_data():
-    """Carrega e processa dados com validação completa"""
+    """Carrega e processa dados mantendo a estrutura original"""
     try:
         setup_persistent_environment()
         logger.info("Iniciando processamento de dados...")
 
-        # 1. Carregar dados brutos
-        sheets_to_read = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN',
-                         'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ']
-        
+        # Mapeamento de colunas esperadas
+        column_mapping = {
+            'data': 'data',
+            'agente': 'agente',
+            'beneficiario': 'beneficiario',
+            'valor_transacionado': 'valor_transacionado',
+            'valor_liberado': 'valor_liberado',
+            'taxa_de_juros': 'taxa_de_juros',
+            'comissão_agente': 'comissao_agente',
+            'extra_agente': 'extra_agente',
+            'valor_dualcred': 'valor_dualcred',
+            'nota_fiscal': 'nota_fiscal',
+            'porcentagem_agente': 'porcentagem_agente',
+            'quantidade_parcelas': 'quantidade_parcelas'
+        }
+
+        # Carregar todas as abas
+        sheets = pd.read_excel(EXCEL_PATH, sheet_name=None, engine='openpyxl')
         df_list = []
-        for sheet in sheets_to_read:
+
+        for sheet_name, df in sheets.items():
             try:
-                df_sheet = pd.read_excel(
-                    EXCEL_PATH,
-                    sheet_name=sheet,
-                    engine='openpyxl',
-                    dtype=str
-                )
+                # Sanitizar colunas
+                df.columns = [sanitize_column_name(col) for col in df.columns]
                 
-                # Processamento inicial
-                df_sheet = df_sheet.dropna(axis=1, how='all')
-                df_sheet.columns = [sanitize_column_name(col) for col in df_sheet.columns]
-                df_sheet = df_sheet.loc[:, ~df_sheet.columns.duplicated()]
+                # Renomear colunas
+                df.rename(columns=column_mapping, inplace=True, errors='ignore')
                 
-                df_list.append(df_sheet)
-                logger.debug(f"Aba {sheet} carregada: {len(df_sheet)} registros")
+                # Adicionar colunas faltantes
+                for col in column_mapping.values():
+                    if col not in df.columns:
+                        df[col] = np.nan if col == 'data' else 0.0
                 
+                df_list.append(df)
+                logger.debug(f"Aba {sheet_name} processada com {len(df)} registros")
+
             except Exception as e:
-                logger.warning(f"Erro na aba {sheet}: {str(e)}")
+                logger.warning(f"Erro na aba {sheet_name}: {str(e)}")
                 continue
 
         df = pd.concat(df_list, ignore_index=True) if df_list else pd.DataFrame()
 
-        # 2. Validação de colunas obrigatórias
-        colunas_obrigatorias = [
-            'data', 'agente', 'valor_transacionado', 'valor_liberado',
-            'taxa_de_juros', 'comissão_agente', 'extra_agente'
-        ]
-        
-        for col in colunas_obrigatorias:
-            if col not in df.columns:
-                logger.warning(f"Coluna {col} não encontrada. Criando com valores padrão.")
-                df[col] = None if col == 'data' else 0.0
-                if col == 'agente':
-                    df[col] = 'Alessandro'
-
-        # 3. Processamento de datas
+        # Processamento de datas
         df['data'] = pd.to_datetime(
             df['data'],
             errors='coerce',
-            dayfirst=True,
-            format='mixed'
-        ).fillna(pd.to_datetime('2025-01-01'))  # Data padrão segura
+            dayfirst=True
+        ).fillna(pd.to_datetime('2025-01-01'))
 
-        # 4. Conversão numérica segura
+        # Conversão numérica
         numeric_cols = [
             'valor_transacionado', 'valor_liberado', 'taxa_de_juros',
-            'comissão_agente', 'extra_agente', 'quantidade_parcelas'
+            'comissao_agente', 'extra_agente', 'valor_dualcred',
+            'nota_fiscal', 'porcentagem_agente', 'quantidade_parcelas'
         ]
         
         for col in numeric_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).round(2)
-            else:
-                df[col] = 0.0
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).round(2)
 
-        # 5. Cálculos derivados com verificação
-        df['valor_dualcred'] = (
-            df['valor_transacionado'] 
-            - df['valor_liberado'] 
-            - df['taxa_de_juros'] 
-            - df['comissão_agente'] 
-            - df['extra_agente']
-        ).round(2)
-        
+        # Cálculos condicionais
+        if 'valor_dualcred' not in df.columns:
+            df['valor_dualcred'] = (
+                df['valor_transacionado'] 
+                - df['valor_liberado'] 
+                - df['taxa_de_juros'] 
+                - df['comissao_agente'] 
+                - df['extra_agente']
+            ).round(2)
+
         df['%trans'] = np.where(
             df['valor_transacionado'] > 0,
             (df['valor_dualcred'] / df['valor_transacionado']) * 100,
             0
         ).round(2)
-        
+
         df['%liberad'] = np.where(
             df['valor_liberado'] > 0,
             (df['valor_dualcred'] / df['valor_liberado']) * 100,
             0
         ).round(2)
-        
-        df['nota_fiscal'] = (df['valor_transacionado'] * 0.032).round(2)
 
-        logger.info("Processamento concluído com sucesso")
+        if 'nota_fiscal' not in df.columns:
+            df['nota_fiscal'] = (df['valor_transacionado'] * 0.032).round(2)
+
+        logger.info(f"Dados carregados: {len(df)} registros")
         return df
 
     except Exception as e:
         logger.error(f"Erro crítico no processamento: {str(e)}", exc_info=True)
         return pd.DataFrame()
 
-
 def salvar_no_excel(df):
-    """Salvamento otimizado para ambiente persistente"""
+    """Salvamento incremental mantendo dados existentes"""
     try:
         logger.info("Iniciando salvamento persistente...")
-        
         setup_persistent_environment()
+
+        # Carregar dados existentes
+        existing_data = pd.read_excel(EXCEL_PATH, sheet_name=None, engine='openpyxl')
         
-        meses = {
-            1: 'JAN', 2: 'FEV', 3: 'MAR', 4: 'ABR',
-            5: 'MAI', 6: 'JUN', 7: 'JUL', 8: 'AGO',
-            9: 'SET', 10: 'OUT', 11: 'NOV', 12: 'DEZ'
-        }
-        
-        # Modo 'a' para append mantendo a estrutura existente
         with pd.ExcelWriter(
             EXCEL_PATH,
             engine='openpyxl',
-            mode='a',
-            if_sheet_exists='replace'
+            mode='w'  # Modo de escrita completo para evitar corrupção
         ) as writer:
-            
-            for month_num, sheet_name in meses.items():
-                month_df = df[df['data'].dt.month == month_num].copy()
-                if not month_df.empty:
-                    month_df.to_excel(
-                        writer,
-                        sheet_name=sheet_name,
-                        index=False,
-                        header=True
-                    )
-                    logger.debug(f"Aba {sheet_name} atualizada com {len(month_df)} registros")
-        
-        logger.info("Dados salvos com sucesso no armazenamento persistente")
+            for sheet_name in existing_data.keys():
+                # Combinar dados existentes com novos
+                sheet_df = existing_data[sheet_name]
+                new_data = df[df['data'].dt.strftime('%b').str.upper() == sheet_name]
+                combined_df = pd.concat([sheet_df, new_data]).drop_duplicates()
+                
+                # Manter ordem original das colunas
+                cols_order = [
+                    'data', 'beneficiario', 'valor_transacionado', 'valor_liberado',
+                    'taxa_de_juros', 'comissao_agente', 'extra_agente', 'valor_dualcred',
+                    'nota_fiscal', 'porcentagem_agente', 'quantidade_parcelas', 'agente',
+                    '%trans', '%liberad'
+                ]
+                
+                combined_df = combined_df.reindex(columns=cols_order)
+                combined_df.to_excel(writer, sheet_name=sheet_name, index=False)
+                
+                logger.debug(f"Aba {sheet_name} salva com {len(combined_df)} registros")
+
+        logger.info("Dados salvos com sucesso")
         return True
-    
+
     except Exception as e:
         logger.error(f"Erro no salvamento: {str(e)}")
         return False
 
 def exportar_dados(filtered_df):
-    """Exportação para download sem afetar o arquivo persistente"""
+    """Exportação para download mantendo estrutura original"""
     try:
-        meses = {
-            1: 'JAN', 2: 'FEV', 3: 'MAR', 4: 'ABR',
-            5: 'MAI', 6: 'JUN', 7: 'JUL', 8: 'AGO',
-            9: 'SET', 10: 'OUT', 11: 'NOV', 12: 'DEZ'
-        }
-        
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            for month_num, sheet_name in meses.items():
-                month_df = filtered_df[filtered_df['data'].dt.month == month_num].copy()
-                month_df.to_excel(writer, sheet_name=sheet_name, index=False)
+            for sheet_name in ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN',
+                              'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ']:
+                month_df = filtered_df[filtered_df['data'].dt.strftime('%b').str.upper() == sheet_name]
+                if not month_df.empty:
+                    month_df.to_excel(
+                        writer,
+                        sheet_name=sheet_name,
+                        index=False,
+                        columns=[
+                            'data', 'beneficiario', 'valor_transacionado', 'valor_liberado',
+                            'taxa_de_juros', 'comissao_agente', 'extra_agente', 'valor_dualcred',
+                            'nota_fiscal', 'quantidade_parcelas', 'agente', '%trans', '%liberad'
+                        ]
+                    )
         
         buffer.seek(0)
         return dcc.send_bytes(
             buffer.getvalue(),
-            filename="Dados_Exportados.xlsx",
+            filename="Dados_Atualizados.xlsx",
             type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     
@@ -240,7 +233,9 @@ def exportar_dados(filtered_df):
 try:
     df = load_and_process_data()
     if df.empty:
-        logger.warning("DataFrame inicial vazio - possíveis dados ausentes")
+        logger.warning("DataFrame inicial vazio - verifique o arquivo fonte")
+    else:
+        logger.info(f"Dados iniciais carregados: {df.shape}")
 except Exception as e:
-    logger.error(f"Falha na inicialização: {str(e)}")
+    logger.error(f"Falha crítica na inicialização: {str(e)}")
     df = pd.DataFrame()
