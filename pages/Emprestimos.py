@@ -404,4 +404,3 @@ def apagar_linha(selected_rows, start_date, end_date):
     except Exception as e:
         print(f"Erro ao apagar: {str(e)}")
         return f"❌ Erro ao apagar linha: {str(e)}", None, dash.no_update, []
-

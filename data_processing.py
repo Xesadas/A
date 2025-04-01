@@ -4,6 +4,12 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import io
+import os
+
+# Configuração do caminho persistente
+MOUNT_PATH = '/data'
+EXCEL_PATH = os.path.join(MOUNT_PATH, 'b.xlsx')
+
 global df
 
 def sanitize_column_name(col):
@@ -17,21 +23,32 @@ def sanitize_column_name(col):
         .replace("?", "")
     )
 
+def ensure_directory_exists():
+    """Verifica e cria o diretório se necessário"""
+    if not os.path.exists(MOUNT_PATH):
+        os.makedirs(MOUNT_PATH)
+        print(f"Diretório {MOUNT_PATH} criado com sucesso")
+
 def load_and_process_data():
     """Função única para carregar e pré-processar todos os dados"""
+    ensure_directory_exists()
+    
     # 1. Carregar dados brutos
-    file_path = 'b.xlsx'
     sheets_to_read = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 
                      'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ']
     
     df_list = []
-    for sheet in sheets_to_read:
-        df_sheet = pd.read_excel(file_path, sheet_name=sheet, engine='openpyxl')
-        df_sheet = df_sheet.dropna(axis=1, how='all')
-        df_sheet.columns = [sanitize_column_name(col) for col in df_sheet.columns]
-        df_sheet = df_sheet.loc[:, ~df_sheet.columns.duplicated()]
-        df_list.append(df_sheet)
-    
+    try:
+        for sheet in sheets_to_read:
+            df_sheet = pd.read_excel(EXCEL_PATH, sheet_name=sheet, engine='openpyxl')
+            df_sheet = df_sheet.dropna(axis=1, how='all')
+            df_sheet.columns = [sanitize_column_name(col) for col in df_sheet.columns]
+            df_sheet = df_sheet.loc[:, ~df_sheet.columns.duplicated()]
+            df_list.append(df_sheet)
+    except FileNotFoundError:
+        print(f"Arquivo {EXCEL_PATH} não encontrado. Iniciando com DataFrame vazio.")
+        return pd.DataFrame()
+
     df = pd.concat(df_list, ignore_index=True)
 
     # 2. Pré-processamento básico
@@ -109,12 +126,15 @@ def salvar_no_excel(df):
     meses = {1: 'JAN', 2: 'FEV', 3: 'MAR', 4: 'ABR', 5: 'MAI', 6: 'JUN', 
             7: 'JUL', 8: 'AGO', 9: 'SET', 10: 'OUT', 11: 'NOV', 12: 'DEZ'}
     try:
-        with pd.ExcelWriter('b.xlsx', engine='openpyxl') as writer:
+        ensure_directory_exists()
+        with pd.ExcelWriter(EXCEL_PATH, engine='openpyxl') as writer:
             for month_num, sheet_name in meses.items():
                 month_df = df[df['data'].dt.month == month_num].copy()
                 month_df.to_excel(writer, sheet_name=sheet_name, index=False)
+        print(f"Dados salvos com sucesso em {EXCEL_PATH}")
     except Exception as e:
         print(f"Erro ao salvar: {str(e)}")
+        raise
 
 def exportar_dados(filtered_df):
     meses = {1: 'JAN', 2: 'FEV', 3: 'MAR', 4: 'ABR', 5: 'MAI', 6: 'JUN', 
@@ -128,10 +148,12 @@ def exportar_dados(filtered_df):
             buffer.seek(0)
         return dcc.send_bytes(
             buffer.getvalue(), 
-            filename="Nome_diferente.xlsx",
+            filename="Dados_Exportados.xlsx",
             type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     except Exception as e:
         print(f"Erro na exportação: {str(e)}")
         return None
+
+# Carregar dados inicialmente
 df = load_and_process_data()
