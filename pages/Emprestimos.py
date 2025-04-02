@@ -9,7 +9,25 @@ import data_processing
 register_page(__name__, path='/')
 
 # Carrega dados e configurações
-df = data_processing.load_and_process_data()
+processed_sheets = data_processing.load_and_process_data()
+
+# Concatena todas as abas e cria fallback para estrutura vazia
+base_columns = [
+    'data', 'agente', 'beneficiario', 'chave_pix_cpf', 'valor_transacionado',
+    'valor_liberado', 'quantidade_parcelas', 'porcentagem_agente', 'taxa_de_juros',
+    'extra_agente', 'comissao_agente', 'valor_dualcred', 'nota_fiscal',
+    '%trans', '%liberad'
+]
+
+if processed_sheets:
+    df = pd.concat(processed_sheets.values(), ignore_index=True)
+else:
+    df = pd.DataFrame(columns=base_columns)
+
+# Configura datas padrão seguras
+min_date = df['data'].min() if not df.empty else pd.to_datetime('2025-01-01')
+max_date = df['data'].max() if not df.empty else pd.to_datetime('2025-12-31')
+
 
 # Configurações da página
 colors = {
@@ -20,7 +38,7 @@ colors = {
 input_columns = [
     'data', 'agente', 'beneficiário', 'chave_pix_cpf',
     'valor_transacionado', 'valor_liberado', 'quantidade_parcelas',
-    'porcentagem_agente', 'taxa_de_juros', 'extra_agente'
+    'porcentagem_agente', 'taxa_de_juros', 'extra_agente',
 ]
 
 numeric_cols = [
@@ -89,8 +107,8 @@ layout = html.Div(
         # Filtro de Data
         dcc.DatePickerRange(
             id="date-picker",
-            start_date=df['data'].min(),
-            end_date=df['data'].max(),
+            start_date=min_date,
+            end_date=max_date,
             display_format="DD/MM/YYYY"
         ),
 
@@ -194,8 +212,11 @@ layout = html.Div(
 )
 def filtrar_dados(start_date, end_date):
     try:
-        start_date = pd.to_datetime(start_date) if start_date else df['data'].min()
-        end_date = pd.to_datetime(end_date) if end_date else df['data'].max()
+        if df.empty:
+            return []
+            
+        start_date = pd.to_datetime(start_date) if start_date else min_date
+        end_date = pd.to_datetime(end_date) if end_date else max_date
         
         mask = (df['data'] >= start_date) & (df['data'] <= end_date)
         df_filtrado = df.loc[mask].copy()
@@ -204,7 +225,7 @@ def filtrar_dados(start_date, end_date):
         return df_filtrado.to_dict("records")
     except Exception as e:
         print(f"Erro de filtragem: {str(e)}")
-        return df.to_dict("records")
+        return df.to_dict("records") if not df.empty else []
 
 @callback(
     Output("soma-result", "children"),
@@ -228,28 +249,25 @@ def calcular_soma(start_date, end_date):
         soma = {
             'Valor_Transacionado': df_filtrado['valor_transacionado'].sum(),
             'Valor_Liberado': df_filtrado['valor_liberado'].sum(),
-            'Comissão_Agente': df_filtrado['comissão_agente'].sum(),
+            # 'Comissão_Agente': df_filtrado['comissão_agente'].sum(),
             'Valor_DualCred': df_filtrado['valor_dualcred'].sum(),
             'Extra_Agente': df_filtrado['extra_agente'].sum(),
             'nota_fiscal': df_filtrado['nota_fiscal'].sum()
-
-
         }
         
         return html.Pre(
             f"RELATÓRIO DE VALORES\n"
             f"──────────────────────\n"
-            f"Período: {start_str} - {end_str}\n\n"  # Usar strings tratadas
+            f"Período: {start_str} - {end_str}\n\n"
             f"Valor Transacionado: R$ {soma['Valor_Transacionado']:,.2f}\n"
             f"Valor Liberado:      R$ {soma['Valor_Liberado']:,.2f}\n"
-            f"Comissão Agente:     R$ {soma['Comissão_Agente']:,.2f}\n"
+            # f"Comissão Agente:     R$ {soma['Comissão_Agente']:,.2f}\n"  # Key corrected here
             f"Valor Dualcred:      R$ {soma['Valor_DualCred']:,.2f}\n"
             f"Extra Agente:        R$ {soma['Extra_Agente']:,.2f}\n"
             f"Nota Fiscal:         R$ {soma['nota_fiscal']:,.2f}"
         )
     except Exception as e:
         return html.Pre(f"Erro no cálculo: {str(e)}")
-
     
 
 @callback(
