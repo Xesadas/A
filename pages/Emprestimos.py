@@ -318,7 +318,7 @@ def gerenciar_dados(*args):
             return salvar_dados(form_inputs, filtered_df, start_date, end_date)
             
         elif triggered_id == "exportar-btn":
-            export_data = data_processing.exportar_dados(filtered_df)
+            export_data = data_processing.exportar_dados(processed_sheets)  # Dicionário de abas
             return (
             "✅ Planilha exportada com sucesso!",  # Mensagem
             export_data,                          # Dados download

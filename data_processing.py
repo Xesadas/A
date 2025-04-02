@@ -207,9 +207,18 @@ def salvar_no_excel(df):
 def exportar_dados(processed_sheets):
     """Exporta mantendo a estrutura por abas"""
     try:
+        logger.info("Iniciando exportação...")
         buffer = io.BytesIO()
+        
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             for sheet_name, df in processed_sheets.items():
+                logger.info(f"Exportando aba: {sheet_name}")
+                
+                # Verificar se df tem as colunas necessárias
+                if df.empty:
+                    logger.warning(f"Aba {sheet_name} vazia")
+                    continue
+                    
                 df.to_excel(
                     writer,
                     sheet_name=sheet_name,
@@ -222,6 +231,7 @@ def exportar_dados(processed_sheets):
                 )
         
         buffer.seek(0)
+        logger.info("Exportação concluída com sucesso")
         return dcc.send_bytes(
             buffer.getvalue(),
             filename="Dados_Atualizados.xlsx",
@@ -229,9 +239,9 @@ def exportar_dados(processed_sheets):
         )
     
     except Exception as e:
-        logger.error(f"Erro na exportação: {str(e)}")
+        logger.error(f"Erro na exportação: {str(e)}", exc_info=True)  # Log detalhado
         return None
-
+    
 # Inicialização segura
 try:
     processed_sheets = load_and_process_data()
