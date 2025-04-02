@@ -36,14 +36,14 @@ colors = {
 }
 
 input_columns = [
-    'data', 'agente', 'beneficiário', 'chave_pix_cpf',
+    'data', 'agente', 'beneficiario', 'chave_pix_cpf',
     'valor_transacionado', 'valor_liberado', 'quantidade_parcelas',
     'porcentagem_agente', 'taxa_de_juros', 'extra_agente',
 ]
 
 numeric_cols = [
     'valor_transacionado', 'valor_liberado', 'taxa_de_juros',
-    'comissão_agente', 'extra_agente', 'porcentagem_agente',
+    'comissao_agente', 'extra_agente', 'porcentagem_agente',
     'nota_fiscal', 'quantidade_parcelas'
 ]
 
@@ -249,7 +249,7 @@ def calcular_soma(start_date, end_date):
         soma = {
             'Valor_Transacionado': df_filtrado['valor_transacionado'].sum(),
             'Valor_Liberado': df_filtrado['valor_liberado'].sum(),
-            # 'Comissão_Agente': df_filtrado['comissão_agente'].sum(),
+            'Comissao_Agente': df_filtrado['comissao_agente'].sum(),
             'Valor_DualCred': df_filtrado['valor_dualcred'].sum(),
             'Extra_Agente': df_filtrado['extra_agente'].sum(),
             'nota_fiscal': df_filtrado['nota_fiscal'].sum()
@@ -261,7 +261,7 @@ def calcular_soma(start_date, end_date):
             f"Período: {start_str} - {end_str}\n\n"
             f"Valor Transacionado: R$ {soma['Valor_Transacionado']:,.2f}\n"
             f"Valor Liberado:      R$ {soma['Valor_Liberado']:,.2f}\n"
-            # f"Comissão Agente:     R$ {soma['Comissão_Agente']:,.2f}\n"  # Key corrected here
+            f"Comissao Agente:     R$ {soma['Comissao_Agente']:,.2f}\n"  # Key corrected here
             f"Valor Dualcred:      R$ {soma['Valor_DualCred']:,.2f}\n"
             f"Extra Agente:        R$ {soma['Extra_Agente']:,.2f}\n"
             f"Nota Fiscal:         R$ {soma['nota_fiscal']:,.2f}"
@@ -288,7 +288,8 @@ def calcular_soma(start_date, end_date):
     prevent_initial_call=True
 )
 def gerenciar_dados(*args):
-    global df
+    global processed_sheets
+    #processed_sheets = data_processing.load_and_process_data() 
     ctx = dash.callback_context
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
 
@@ -355,14 +356,14 @@ def salvar_dados(form_inputs, filtered_df, start_date, end_date):
             novos_dados['data'] = pd.Timestamp('2025-01-01')
             
         # 2. Cálculos automáticos
-        novos_dados['comissão_agente'] = round(
+        novos_dados['comissao_agente'] = round(
             novos_dados['valor_liberado'] * (novos_dados['porcentagem_agente'] / 100), 2
         )
         novos_dados['valor_dualcred'] = (
             novos_dados['valor_transacionado'] 
             - novos_dados['valor_liberado'] 
             - novos_dados['taxa_de_juros'] 
-            - novos_dados['comissão_agente'] 
+            - novos_dados['comissao_agente'] 
             - novos_dados['extra_agente']
         )
         novos_dados['%trans'] = round(
@@ -376,7 +377,7 @@ def salvar_dados(form_inputs, filtered_df, start_date, end_date):
         # 3. Atualizar DataFrame global
         global df
         df = pd.concat([df, pd.DataFrame([novos_dados])], ignore_index=True)
-        data_processing.salvar_no_excel(df)
+        data_processing.salvar_no_excel(df) 
 
         # 4. Reaplicar filtro após atualização
         mask = (df['data'] >= start_date) & (df['data'] <= end_date)

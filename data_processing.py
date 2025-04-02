@@ -160,52 +160,50 @@ def load_and_process_data():
         return {}
     
 
-def salvar_no_excel(processed_sheets):
-    """Salva dados mantendo a estrutura original das abas"""
+def salvar_no_excel(df):
+    """Salva o DataFrame dividindo as linhas por abas mensais."""
     try:
         logger.info("Salvando dados...")
         setup_persistent_environment()
 
-        # Carregar estrutura completa do arquivo
-        writer = pd.ExcelWriter(
-            EXCEL_PATH,
-            engine='openpyxl',
-            mode='w'  # Recria o arquivo completamente
-        )
-        
-        # Para cada aba possível
-        all_sheets = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN',
-                     'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ']
-        
-        for sheet_name in all_sheets:
-            # Usar dados processados ou criar DataFrame vazio
-            df = processed_sheets.get(sheet_name, pd.DataFrame(columns=[
+        # Mapear meses para nomes das abas
+        month_names = {
+            1: 'JAN', 2: 'FEV', 3: 'MAR', 4: 'ABR', 5: 'MAI', 6: 'JUN',
+            7: 'JUL', 8: 'AGO', 9: 'SET', 10: 'OUT', 11: 'NOV', 12: 'DEZ'
+        }
+
+        # Criar um writer para o Excel
+        writer = pd.ExcelWriter(EXCEL_PATH, engine='openpyxl')
+
+        # Dividir o DataFrame por mês e salvar em abas
+        df['data'] = pd.to_datetime(df['data'])
+        df['month'] = df['data'].dt.month.map(month_names)
+
+        for sheet_name in month_names.values():
+            # Filtrar dados do mês
+            df_month = df[df['month'] == sheet_name].drop(columns=['month'])
+
+            # Garantir a ordem das colunas
+            df_month = df_month.reindex(columns=[
                 'data', 'beneficiario', 'valor_transacionado', 'valor_liberado',
                 'taxa_de_juros', 'comissao_agente', 'extra_agente', 'valor_dualcred',
                 'nota_fiscal', 'porcentagem_agente', 'quantidade_parcelas', 'agente',
                 '%trans', '%liberad'
-            ]))
-            
-            df.to_excel(
+            ])
+
+            # Salvar na aba correspondente
+            df_month.to_excel(
                 writer,
                 sheet_name=sheet_name,
-                index=False,
-                columns=[
-                    'data', 'beneficiario', 'valor_transacionado', 'valor_liberado',
-                    'taxa_de_juros', 'comissao_agente', 'extra_agente', 'valor_dualcred',
-                    'nota_fiscal', 'porcentagem_agente', 'quantidade_parcelas', 'agente',
-                    '%trans', '%liberad'
-                ]
+                index=False
             )
-        
-        writer.close()
-        logger.info("Dados salvos com integridade")
-        return True
 
+        writer.close()
+        return True
     except Exception as e:
         logger.error(f"Erro ao salvar: {str(e)}")
         return False
-
+    
 def exportar_dados(processed_sheets):
     """Exporta mantendo a estrutura por abas"""
     try:
